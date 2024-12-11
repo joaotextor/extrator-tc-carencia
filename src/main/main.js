@@ -11,7 +11,7 @@ function createWindow() {
     },
   });
 
-  // win.setMenu(null);
+  win.setMenu(null);
   win.loadFile("src/renderer/index.html");
 }
 
