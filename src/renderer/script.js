@@ -6,6 +6,7 @@ let selectedFilePath = null;
 
 document.getElementById("loadPdfBtn").addEventListener("click", async () => {
   const result = await ipcRenderer.invoke("open-file-dialog");
+  document.getElementById("extractionResult").textContent = "";
 
   if (!result.canceled) {
     selectedFilePath = result.filePaths[0];
@@ -23,45 +24,63 @@ async function extractPDFData(filePath) {
   for (let i = 1; i <= data.numPages; i++) {
     const page = await data.getPage(i);
     const textContent = await page.getTextContent();
-    textContent.items.forEach((item) => {
-      fullText += item.str + " ";
-    });
+    if (textContent && textContent.items) {
+      textContent.items.forEach((item) => {
+        fullText += item.str + " ";
+      });
+    }
   }
 
-  // Extract only the first profile line
+  // Normalize spaces - replace multiple spaces with single space
+  fullText = fullText.replace(/\s+/g, " ").trim();
+
   const profileMatch = fullText.match(
-    /Perfil\s+contributivo\s+:\s+4202\s+-\s+Aposentadoria\s+por\s+tempo\s+de\s+contribuicao\s+convencional/
+    /Perfil contributivo : \d+ - Aposentadoria por[^]*?(?=Regra de direito|$)/
   );
-  const profile = profileMatch ? profileMatch[0].trim() : "";
+  const profile = profileMatch
+    ? profileMatch[0].trim()
+    : "Perfil não encontrado";
 
-  // Extract blocks with updated patterns
-  const blocks = fullText.match(
-    /Analise do direito em [\d\/]+[\s\S]+?(?=Analise do direito em|$)/g
-  );
+  const blocks =
+    fullText.match(
+      /Analise do direito em [\d\/]+[\s\S]+?(?=Analise do direito em|$)/g
+    ) || [];
 
-  let result = profile + "\n\n\n";
+  let result = `<span class="beneficio">${profile}</span>` + "\n\n\n";
 
   blocks.forEach((block) => {
-    console.log(`Block: ${block}`);
-    const dateMatch = block.match(/Analise do direito em ([\d\/]+)/);
-    const timeMatch = block.match(
-      /Tempo\s+de\s+contribuicao\s+:\s+([\d]+a,\s*[\d]+m,\s*[\d]+d)/
+    // Normalize spaces in each block
+    const normalizedBlock = block.replace(/\s+/g, " ").trim();
+
+    if (normalizedBlock.includes("Tempo de contribuicao (bruto)")) {
+      return;
+    }
+
+    const dateMatch = normalizedBlock.match(/Analise do direito em ([\d\/]+)/);
+    const timeMatch = normalizedBlock.match(
+      /Tempo de contribuicao : ([\d]+a, [\d]+m, [\d]+d)/
     );
-    const carenciaMatch = block.match(/Quantidade\s+de\s+carencia\s+:\s+(\d+)/);
+    const carenciaMatch = normalizedBlock.match(
+      /Quantidade de carencia : (\d+)/
+    );
 
     const date = dateMatch ? dateMatch[1] : "";
     const time = timeMatch ? timeMatch[1] : "";
     const carencia = carenciaMatch ? carenciaMatch[1] : "";
 
-    result += `Analise do direito em ${date}\n\n`;
+    result += `<span class="analiseDireito">Analise do direito em ${date}</span>\n\n`;
     result += `Tempo de contribuicao : ${time}\n`;
-    result += `Quantidade de carencia : ${carencia}\n\n`;
+    result += `Quantidade de carencia : ${carencia}\n\n\n`;
   });
 
-  return result;
+  const newBlocks = result.split("\n\n\n");
+  const newProfile = newBlocks[0];
+  const uniqueBlocks = [...new Set(newBlocks.slice(1))];
+  const finalResult = newProfile + "\n\n\n" + uniqueBlocks.join("\n\n\n");
+
+  return finalResult;
 }
 
-// Update the extract button click handler:
 document.getElementById("extractBtn").addEventListener("click", async () => {
   if (!selectedFilePath) {
     alert("Por favor, selecione um arquivo PDF primeiro.");
@@ -70,7 +89,7 @@ document.getElementById("extractBtn").addEventListener("click", async () => {
 
   try {
     const extractedText = await extractPDFData(selectedFilePath);
-    document.getElementById("extractionResult").textContent = extractedText;
+    document.getElementById("extractionResult").innerHTML = extractedText; // Changed from textContent to innerHTML
   } catch (error) {
     console.error("Error extracting PDF:", error);
     alert("Erro ao extrair dados do PDF");
