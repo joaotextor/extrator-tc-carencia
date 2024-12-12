@@ -9,6 +9,7 @@ let selectedFilePath = null;
 document.getElementById("loadPdfBtn").addEventListener("click", async () => {
   const result = await ipcRenderer.invoke("open-file-dialog");
   document.getElementById("extractionResult").textContent = "";
+  updateCopyButtonState();
 
   if (!result.canceled) {
     selectedFilePath = result.filePaths[0];
@@ -18,6 +19,24 @@ document.getElementById("loadPdfBtn").addEventListener("click", async () => {
     ).textContent = `Arquivo selecionado: ${fileName}`;
   }
 });
+
+document.getElementById("copyBtn").addEventListener("click", () => {
+  const resultDiv = document.getElementById("extractionResult");
+  const textContent = resultDiv.textContent;
+  navigator.clipboard.writeText(textContent).then(() => {
+    const originalText = document.getElementById("copyBtn").textContent;
+    document.getElementById("copyBtn").textContent = "Copiado!";
+    setTimeout(() => {
+      document.getElementById("copyBtn").textContent = originalText;
+    }, 2000);
+  });
+});
+
+function updateCopyButtonState() {
+  const resultDiv = document.getElementById("extractionResult");
+  const copyBtn = document.getElementById("copyBtn");
+  copyBtn.disabled = !resultDiv.textContent.trim();
+}
 
 async function extractTextFromImageOCR(pdfPath) {
   const pdf2img = require("pdf-poppler");
@@ -199,7 +218,8 @@ document.getElementById("extractBtn").addEventListener("click", async () => {
 
   try {
     const extractedText = await extractPDFData(selectedFilePath);
-    document.getElementById("extractionResult").innerHTML = extractedText; // Changed from textContent to innerHTML
+    document.getElementById("extractionResult").innerHTML = extractedText;
+    updateCopyButtonState();
   } catch (error) {
     console.error("Error extracting PDF:", error);
     alert("Erro ao extrair dados do PDF");
