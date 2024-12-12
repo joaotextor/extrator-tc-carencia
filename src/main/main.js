@@ -41,6 +41,13 @@ app.on("before-quit", async () => {
   }
 });
 
+ipcMain.handle("cleanup-ocr", async () => {
+  if (worker) {
+    await worker.terminate();
+    worker = null;
+  }
+});
+
 ipcMain.handle("open-file-dialog", async () => {
   const result = await dialog.showOpenDialog({
     properties: ["openFile"],

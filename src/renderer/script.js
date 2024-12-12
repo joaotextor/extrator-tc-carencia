@@ -23,13 +23,18 @@ async function extractTextFromImageOCR(pdfPath) {
   const pdf2img = require("pdf-poppler");
   const fs = require("fs");
 
+  const tempDir = path.join(path.dirname(pdfPath), ".temp_ocr");
+  if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir);
+  }
+
   try {
     const opts = {
       format: "png",
-      out_dir: path.dirname(pdfPath),
+      out_dir: tempDir,
       out_prefix: "page",
       page: null,
-      density: 450,
+      density: 300,
       quality: 100,
       scale: 2250,
     };
@@ -49,6 +54,9 @@ async function extractTextFromImageOCR(pdfPath) {
     });
 
     const texts = await Promise.all(textPromises);
+    await ipcRenderer.invoke("cleanup-ocr");
+    fs.rmdirSync(tempDir);
+
     return texts.join("\n");
   } catch (error) {
     console.error("Error in OCR processing:", error);
@@ -99,7 +107,6 @@ async function extractPDFData(filePath) {
 
   // Normalize spaces - replace multiple spaces with single space
   fullText = fullText.replace(/\s+/g, " ").trim();
-  // console.log(fullText);
 
   let profileMatch = fullText.match(
     /Perfil contributivo : \d+ - Aposentadoria por[^]*?(?=Regra de direito|$)/
@@ -116,7 +123,6 @@ async function extractPDFData(filePath) {
       /Perfil contributivo : \d+ - Aposentadoria por[^]*?(?=Regra de direito|$)/
     );
     profile = profileMatch[0].trim();
-    console.log(`Profile Match: ${profileMatch}`);
   }
 
   const blocks =
