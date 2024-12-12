@@ -1,5 +1,7 @@
 const { ipcRenderer } = require("electron");
 const pdfjsLib = require("pdfjs-dist");
+const path = require("path");
+
 pdfjsLib.GlobalWorkerOptions.workerSrc = require("pdfjs-dist/build/pdf.worker.entry");
 
 let selectedFilePath = null;
@@ -17,9 +19,73 @@ document.getElementById("loadPdfBtn").addEventListener("click", async () => {
   }
 });
 
+async function extractTextFromImageOCR(pdfPath) {
+  const pdf2img = require("pdf-poppler");
+  const fs = require("fs");
+
+  try {
+    const opts = {
+      format: "png",
+      out_dir: path.dirname(pdfPath),
+      out_prefix: "page",
+      page: null,
+      density: 450,
+      quality: 100,
+      scale: 2250,
+    };
+
+    await pdf2img.convert(pdfPath, opts);
+
+    const files = fs
+      .readdirSync(opts.out_dir)
+      .filter((f) => f.startsWith("page"));
+
+    // Process all images in parallel
+    const textPromises = files.map(async (file) => {
+      const imagePath = path.join(opts.out_dir, file);
+      const text = await ipcRenderer.invoke("process-ocr", imagePath);
+      fs.unlinkSync(imagePath);
+      return text;
+    });
+
+    const texts = await Promise.all(textPromises);
+    return texts.join("\n");
+  } catch (error) {
+    console.error("Error in OCR processing:", error);
+    throw error;
+  }
+}
+
+function normalizeOCRNumbers(text) {
+  // Normalize "Quantidade de carencia" numbers - only the value after ":"
+  text = text.replace(/Quantidade de carencia:\s*(\d+)/g, (match, num) => {
+    return `Quantidade de carencia: ${num
+      .replace(/[Oo]/g, "0")
+      .replace(/[S]/g, "5")}`;
+  });
+
+  // Normalize "Tempo de contribuicao" format - only the value after ":"
+  text = text.replace(
+    /(Tempo de contribuicao\s*:\s*)(\d|[Oo]|[l]|[S]){2}a,\s*(\d|[Oo]|[l]|[S]){2}m,\s*(\d|[Oo]|[l]|[S]){2}d/g,
+    (match, prefix, ...groups) => {
+      return (
+        prefix +
+        match
+          .slice(prefix.length)
+          .replace(/[Oo]/g, "0")
+          .replace(/[l]/g, "1")
+          .replace(/[S]/g, "5")
+      );
+    }
+  );
+
+  return text;
+}
+
 async function extractPDFData(filePath) {
   const data = await pdfjsLib.getDocument(`file://${filePath}`).promise;
   let fullText = "";
+  let profile = "";
 
   for (let i = 1; i <= data.numPages; i++) {
     const page = await data.getPage(i);
@@ -33,13 +99,25 @@ async function extractPDFData(filePath) {
 
   // Normalize spaces - replace multiple spaces with single space
   fullText = fullText.replace(/\s+/g, " ").trim();
+  // console.log(fullText);
 
-  const profileMatch = fullText.match(
+  let profileMatch = fullText.match(
     /Perfil contributivo : \d+ - Aposentadoria por[^]*?(?=Regra de direito|$)/
   );
-  const profile = profileMatch
-    ? profileMatch[0].trim()
-    : "Perfil não encontrado";
+
+  if (profileMatch) {
+    profile = profileMatch[0].trim();
+  } else {
+    fullText = await extractTextFromImageOCR(filePath);
+    fullText = fullText.replace(/\s+/g, " ").trim();
+    fullText = normalizeOCRNumbers(fullText);
+    console.log(`OCR Text: ${fullText}`);
+    profileMatch = fullText.match(
+      /Perfil contributivo : \d+ - Aposentadoria por[^]*?(?=Regra de direito|$)/
+    );
+    profile = profileMatch[0].trim();
+    console.log(`Profile Match: ${profileMatch}`);
+  }
 
   const blocks =
     fullText.match(
