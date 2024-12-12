@@ -39,24 +39,41 @@ async function extractTextFromImageOCR(pdfPath) {
       scale: 2250,
     };
 
+    const progressBar = document.getElementById("progressBar");
+    const progressLabel = document.getElementById("progressLabel");
+    progressBar.style.display = "block";
+    progressLabel.style.display = "block";
+    progressBar.value = 0;
+    progressLabel.textContent = "Extraindo Imagens do PDF";
+
     await pdf2img.convert(pdfPath, opts);
+    progressBar.value = 50;
+
+    progressLabel.textContent = "Extraindo texto";
 
     const files = fs
       .readdirSync(opts.out_dir)
       .filter((f) => f.startsWith("page"));
+
+    const totalFiles = files.length;
+    let processedFiles = 0;
 
     // Process all images in parallel
     const textPromises = files.map(async (file) => {
       const imagePath = path.join(opts.out_dir, file);
       const text = await ipcRenderer.invoke("process-ocr", imagePath);
       fs.unlinkSync(imagePath);
+
+      processedFiles++;
+      progressBar.value = 50 + (processedFiles / totalFiles) * 50;
       return text;
     });
 
     const texts = await Promise.all(textPromises);
     await ipcRenderer.invoke("cleanup-ocr");
     fs.rmdirSync(tempDir);
-
+    progressBar.style.display = "none";
+    progressLabel.style.display = "none";
     return texts.join("\n");
   } catch (error) {
     console.error("Error in OCR processing:", error);
