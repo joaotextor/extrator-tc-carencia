@@ -177,6 +177,15 @@ async function extractPDFData(filePath) {
   const newBlocks = result.split("\n\n\n");
   const newProfile = newBlocks[0];
   const uniqueBlocks = [...new Set(newBlocks.slice(1))];
+
+  // Add DER marker to first block after removing duplicates
+  if (uniqueBlocks.length > 0) {
+    uniqueBlocks[0] = uniqueBlocks[0].replace(
+      /Analise do direito em ([\d\/]+)/,
+      "Analise do direito em $1 (DER)"
+    );
+  }
+
   const finalResult = newProfile + "\n\n\n" + uniqueBlocks.join("\n\n\n");
 
   return finalResult;
