@@ -141,7 +141,7 @@ async function extractPDFData(filePath) {
     }
   }
 
-  // Normalize spaces - replace multiple spaces with single space
+  // Mantém apenas espaço simples.
   fullText = fullText.replace(/\s+/g, " ").trim();
 
   let profileMatch = fullText.match(
@@ -170,7 +170,7 @@ async function extractPDFData(filePath) {
   let earliestDate = null;
 
   blocks.forEach((block) => {
-    // Normalize spaces in each block
+    // Mantém apenas espaço simples.
     const normalizedBlock = block.replace(/\s+/g, " ").trim();
 
     if (normalizedBlock.includes("Tempo de contribuicao (bruto)")) {
@@ -210,7 +210,7 @@ async function extractPDFData(filePath) {
   const newProfile = newBlocks[0];
   const uniqueBlocks = [...new Set(newBlocks.slice(1))];
 
-  // Add DER marker only to the block with the most recent date
+  // Adiciona DER na data mais recente
   if (earliestDate && uniqueBlocks.length > 0) {
     uniqueBlocks.forEach((block, index) => {
       if (block.includes(earliestDate.dateStr)) {
