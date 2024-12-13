@@ -167,6 +167,7 @@ async function extractPDFData(filePath) {
     ) || [];
 
   let result = `<span class="beneficio">${profile}</span>` + "\n\n\n";
+  let earliestDate = null;
 
   blocks.forEach((block) => {
     // Normalize spaces in each block
@@ -178,15 +179,27 @@ async function extractPDFData(filePath) {
 
     const dateMatch = normalizedBlock.match(/Analise do direito em ([\d\/]+)/);
     const timeMatch = normalizedBlock.match(
-      /Tempo de contribuicao : ([\d]+a, [\d]+m, [\d]+d)/
+      /Tempo de contribuicao : ([\d]+a, [\d]+m, [\d]+d)|Total de tempo comum : ([\d]+a, [\d]+m, [\d]+d)/
     );
     const carenciaMatch = normalizedBlock.match(
       /Quantidade de carencia : (\d+)/
     );
 
     const date = dateMatch ? dateMatch[1] : "";
-    const time = timeMatch ? timeMatch[1] : "";
+    const time = timeMatch ? timeMatch[1] || timeMatch[2] : "";
     const carencia = carenciaMatch ? carenciaMatch[1] : "";
+
+    if (date) {
+      const [day, month, year] = date.split("/").map(Number);
+      const currentDate = new Date(year, month - 1, day);
+
+      if (!earliestDate || currentDate > earliestDate.date) {
+        earliestDate = {
+          date: currentDate,
+          dateStr: date,
+        };
+      }
+    }
 
     result += `<span class="analiseDireito">Analise do direito em ${date}</span>\n\n`;
     result += `Tempo de contribuicao : ${time}\n`;
@@ -197,12 +210,16 @@ async function extractPDFData(filePath) {
   const newProfile = newBlocks[0];
   const uniqueBlocks = [...new Set(newBlocks.slice(1))];
 
-  // Add DER marker to first block after removing duplicates
-  if (uniqueBlocks.length > 0) {
-    uniqueBlocks[0] = uniqueBlocks[0].replace(
-      /Analise do direito em ([\d\/]+)/,
-      "Analise do direito em $1 (DER)"
-    );
+  // Add DER marker only to the block with the most recent date
+  if (earliestDate && uniqueBlocks.length > 0) {
+    uniqueBlocks.forEach((block, index) => {
+      if (block.includes(earliestDate.dateStr)) {
+        uniqueBlocks[index] = block.replace(
+          /Analise do direito em ([\d\/]+)/,
+          `Analise do direito em $1 (DER)`
+        );
+      }
+    });
   }
 
   const finalResult = newProfile + "\n\n\n" + uniqueBlocks.join("\n\n\n");
