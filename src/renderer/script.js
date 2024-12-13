@@ -138,6 +138,8 @@ async function extractPDFData(filePath) {
   const data = await pdfjsLib.getDocument(`file://${filePath}`).promise;
   let fullText = "";
   let profile = "";
+  let earliestDate = null;
+  let currentProfile = "";
 
   for (let i = 1; i <= data.numPages; i++) {
     const page = await data.getPage(i);
@@ -157,7 +159,11 @@ async function extractPDFData(filePath) {
   );
 
   if (profileMatch) {
-    profile = profileMatch[0].trim();
+    profile = profileMatch[0]
+      .trim()
+      .replace("contribuícao", "contribuição")
+      .replace("contribuicao", "contribuição")
+      .replace("contríbuicao", "contribuição");
   } else {
     fullText = await extractTextFromImageOCR(filePath);
     fullText = fullText.replace(/\s+/g, " ").trim();
@@ -166,7 +172,11 @@ async function extractPDFData(filePath) {
     profileMatch = fullText.match(
       /Perfil contributivo : \d+ - Aposentadoria por[^]*?(?=Regra de direito|$)/
     );
-    profile = profileMatch[0].trim();
+    profile = profileMatch[0]
+      .trim()
+      .replace("contribuícao", "contribuição")
+      .replace("contribuicao", "contribuição")
+      .replace("contríbuicao", "contribuição");
   }
 
   const blocks =
@@ -174,16 +184,34 @@ async function extractPDFData(filePath) {
       /Analise do direito em [\d\/]+[\s\S]+?(?=Analise do direito em|$)/g
     ) || [];
 
-  let result = `<span class="beneficio">${profile}</span>` + "\n\n\n";
-  let earliestDate = null;
+  let result = "";
+  currentProfile = profile;
 
   blocks.forEach((block) => {
     // Mantém apenas espaço simples.
     const normalizedBlock = block.replace(/\s+/g, " ").trim();
 
-    if (normalizedBlock.includes("Tempo de contribuicao (bruto)")) {
-      return;
+    const profileMatch = normalizedBlock.match(
+      /Perfil contributivo : \d+ - Aposentadoria por[^]*?(?=Regra de direito|Anexo ID|$)/
+    );
+
+    if (
+      profileMatch &&
+      profileMatch[0]
+        .replace("contribuícao", "contribuição")
+        .replace("contribuicao", "contribuição")
+        .replace("contríbuicao", "contribuição") !== currentProfile
+    ) {
+      currentProfile = profileMatch[0]
+        .replace("contribuícao", "contribuição")
+        .replace("contribuicao", "contribuição")
+        .replace("contríbuicao", "contribuição");
+      result += `<span class="beneficio">${currentProfile}</span>\n\n\n`;
     }
+
+    // if (normalizedBlock.includes("Tempo de contribuicao (bruto)")) {
+    //   return;
+    // }
 
     const dateMatch = normalizedBlock.match(/Analise do direito em ([\d\/]+)/);
     const timeMatch = normalizedBlock.match(
