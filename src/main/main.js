@@ -5,7 +5,7 @@ const { createWorker } = require("tesseract.js");
 function createWindow() {
   const win = new BrowserWindow({
     // width: 1024,
-    width: 1524,
+    width: 1024,
     height: 768,
     webPreferences: {
       nodeIntegration: true,
@@ -13,8 +13,8 @@ function createWindow() {
     },
   });
 
-  // win.setMenu(null);
-  win.webContents.openDevTools();
+  win.setMenu(null);
+  // win.webContents.openDevTools();
   win.loadFile("src/renderer/index.html");
 }
 
