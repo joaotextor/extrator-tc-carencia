@@ -1,7 +1,7 @@
 {
   "name": "extrator-tc-carencia",
   "productName": "Extrator de TC e Carência",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
