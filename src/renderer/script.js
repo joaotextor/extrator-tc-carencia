@@ -238,8 +238,8 @@ async function extractPDFData(filePath) {
     }
 
     result += `<span class="analiseDireito">Analise do direito em ${date}</span>\n\n`;
-    result += `Tempo de contribuicao : ${time}\n`;
-    result += `Quantidade de carencia : ${carencia}\n\n\n`;
+    result += `Tempo de contribuição : ${time}\n`;
+    result += `Quantidade de carência : ${carencia}\n\n\n`;
   });
 
   const newBlocks = result.split("\n\n\n");
