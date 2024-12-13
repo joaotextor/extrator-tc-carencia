@@ -48,8 +48,9 @@ button:hover {
 }
 
 #selectedFile {
-  margin-left: 15px;
+  display: block;
   color: #666;
+  margin-top: 10px;
   font-size: 14px;
 }
 

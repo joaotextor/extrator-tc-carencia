@@ -101,25 +101,33 @@ async function extractTextFromImageOCR(pdfPath) {
 }
 
 function normalizeOCRNumbers(text) {
-  // Normalize "Quantidade de carencia" numbers - only the value after ":"
+  // Normalize "Quantidade de carencia" numbers
   text = text.replace(/Quantidade de carencia:\s*(\d+)/g, (match, num) => {
     return `Quantidade de carencia: ${num
       .replace(/[Oo]/g, "0")
-      .replace(/[S]/g, "5")}`;
+      .replace(/[S]/g, "5")
+      .replace(/[l]/g, "1")
+      .replace(/[B]/g, "8")}`;
   });
 
-  // Normalize "Tempo de contribuicao" format - only the value after ":"
+  // New comprehensive pattern for time formats
+  const replacements = {
+    O: "0",
+    o: "0",
+    S: "5",
+    l: "1",
+    B: "8",
+  };
+
+  // Handle all three patterns for time values
   text = text.replace(
-    /(Tempo de contribuicao\s*:\s*)(\d|[Oo]|[l]|[S]){2}a,\s*(\d|[Oo]|[l]|[S]){2}m,\s*(\d|[Oo]|[l]|[S]){2}d/g,
-    (match, prefix, ...groups) => {
-      return (
-        prefix +
-        match
-          .slice(prefix.length)
-          .replace(/[Oo]/g, "0")
-          .replace(/[l]/g, "1")
-          .replace(/[S]/g, "5")
-      );
+    /(\d|[OoSlB])(\d|[OoSlB])(a,|m,|d)|(\d|[OoSlB])([OoSlB])(a,|m,|d)|([OoSlB])(\d|[OoSlB])(a,|m,|d)/g,
+    (match) => {
+      return match
+        .replace(/[Oo]/g, "0")
+        .replace(/[S]/g, "5")
+        .replace(/[l]/g, "1")
+        .replace(/[B]/g, "8");
     }
   );
 
@@ -179,10 +187,10 @@ async function extractPDFData(filePath) {
 
     const dateMatch = normalizedBlock.match(/Analise do direito em ([\d\/]+)/);
     const timeMatch = normalizedBlock.match(
-      /Tempo de contribuicao : ([\d]+a, [\d]+m, [\d]+d)|Total de tempo comum : ([\d]+a, [\d]+m, [\d]+d)/
+      /(?:Tempo de contribuicao|Total de tempo comum)(?:\s+\d+)?\s*:?\s*([\d]+a,\s*[\d]+m,\s*[\d]+d)/
     );
     const carenciaMatch = normalizedBlock.match(
-      /Quantidade de carencia : (\d+)/
+      /Quantidade de carencia(?:\s+\d+)?\s*:?\s*(\d+)/
     );
 
     const date = dateMatch ? dateMatch[1] : "";
