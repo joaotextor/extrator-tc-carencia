@@ -2,6 +2,21 @@ const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
 const { createWorker } = require("tesseract.js");
 
+let originalWidth;
+
+ipcMain.on("toggle-debug", (event, isDebugMode) => {
+  const win = BrowserWindow.getFocusedWindow();
+
+  if (isDebugMode) {
+    originalWidth = win.getSize()[0];
+    win.setSize(originalWidth + 500, win.getSize()[1]);
+    win.webContents.openDevTools({ mode: "right" });
+  } else {
+    win.setSize(originalWidth, win.getSize()[1]);
+    win.webContents.closeDevTools();
+  }
+});
+
 function createWindow() {
   const win = new BrowserWindow({
     // width: 1024,

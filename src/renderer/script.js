@@ -1,6 +1,14 @@
 const { ipcRenderer } = require("electron");
 const pdfjsLib = require("pdfjs-dist");
 const path = require("path");
+let isDebugMode = false;
+
+const debugSpan = document.getElementById("debug");
+
+debugSpan.addEventListener("click", () => {
+  isDebugMode = !isDebugMode;
+  ipcRenderer.send("toggle-debug", isDebugMode);
+});
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = require("pdfjs-dist/build/pdf.worker.entry");
 
@@ -153,6 +161,7 @@ async function extractPDFData(filePath) {
 
   // Mantém apenas espaço simples.
   fullText = fullText.replace(/\s+/g, " ").trim();
+  console.log(fullText);
 
   let profileMatch = fullText.match(
     /Perfil contributivo : \d+ - Aposentadoria por[^]*?(?=Regra de direito|$)/
@@ -190,6 +199,7 @@ async function extractPDFData(filePath) {
   blocks.forEach((block) => {
     // Mantém apenas espaço simples.
     const normalizedBlock = block.replace(/\s+/g, " ").trim();
+    console.log(`Normalized Block: ${normalizedBlock}`);
 
     const profileMatch = normalizedBlock.match(
       /Perfil contributivo : \d+ - Aposentadoria por[^]*?(?=Regra de direito|Anexo ID|$)/
