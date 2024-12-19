@@ -145,9 +145,10 @@ async function extractPDFData(filePath) {
   const data = await pdfjsLib.getDocument(`file://${filePath}`).promise;
   let fullText = "";
   let profile = "";
-  let earliestDate = null;
   let currentProfile = "";
+  let result = "";
 
+  // Get full text from PDF
   for (let i = 1; i <= data.numPages; i++) {
     const page = await data.getPage(i);
     const textContent = await page.getTextContent();
@@ -158,62 +159,57 @@ async function extractPDFData(filePath) {
     }
   }
 
-  // Mantém apenas espaço simples.
+  // Clean up text
   fullText = fullText.replace(/\s+/g, " ").trim();
-  console.log(fullText);
 
+  // Extract initial profile
   let profileMatch = fullText.match(
     /Perfil contributivo : \d+ - Aposentadoria por[^]*?(?=\s*Regra de direito|\s*Página|\s*=|\s*Anexo ID|$)/
   );
 
   if (profileMatch) {
-    profile = profileMatch[0]
-      .trim()
-      .replace("contribuícao", "contribuição")
-      .replace("contribuicao", "contribuição")
-      .replace("contríbuicao", "contribuição");
+    profile = profileMatch[0].trim();
   } else {
     fullText = await extractTextFromImageOCR(filePath);
     fullText = fullText.replace(/\s+/g, " ").trim();
     fullText = normalizeOCRNumbers(fullText);
-    console.log(`OCR Text: ${fullText}`);
-    let profileMatch = fullText.match(
+    profileMatch = fullText.match(
       /Perfil contributivo : \d+ - Aposentadoria por[^]*?(?=\s*Regra de direito|\s*Página|\s*=|\s*Anexo ID|$)/
     );
-    profile = profileMatch[0]
-      .trim()
-      .replace("contribuícao", "contribuição")
-      .replace("contribuicao", "contribuição")
-      .replace("contríbuicao", "contribuição");
+    profile = profileMatch[0].trim();
   }
 
+  // Extract blocks
   const blocks =
     fullText.match(
       /Analise do direito em [\d\/]+[\s\S]+?(?=Analise do direito em|$)/g
     ) || [];
 
-  let result = "";
+  // Process blocks
+  let profileBlocks = new Map(); // Track blocks for each profile
+  let profileDates = new Map(); // Track dates for each profile
+
   currentProfile = profile;
-  console.log(`Number of blocks: ${blocks.length}`);
+  result += `<span class="beneficio">${currentProfile}</span>\n\n\n`;
+  profileBlocks.set(currentProfile, new Set());
+  profileDates.set(currentProfile, { latestDate: null, latestDateStr: null });
 
   blocks.forEach((block) => {
-    // Mantém apenas espaço simples.
     const normalizedBlock = block.replace(/\s+/g, " ").trim();
-    console.log(`Normalized Block: ${normalizedBlock}`);
 
     const profileMatch = normalizedBlock.match(
-      /Perfil contributivo : \d+ - Aposentadoria por[^]*?(?:\s*\(BIC\))?(?=\s*Regra de direito|\s*Página|\s*=|\s*Anexo ID|$)/
+      /Perfil contributivo : \d+ - Aposentadoria por[^]*?(?=\s*Regra de direito|\s*Página|\s*=|\s*Anexo ID|$)/
     );
 
-    if (profileMatch) {
-      const newProfile = profileMatch[0].trim();
-      if (newProfile !== currentProfile) {
-        currentProfile = newProfile;
-
-        result += `<span class="beneficio">${currentProfile
-          .replace("contribuícao", "contribuição")
-          .replace("contribuicao", "contribuição")
-          .replace("contríbuicao", "contribuição")}</span>\n\n\n`;
+    if (profileMatch && profileMatch[0].trim() !== currentProfile) {
+      currentProfile = profileMatch[0].trim();
+      result += `<span class="beneficio">${currentProfile}</span>\n\n\n`;
+      if (!profileBlocks.has(currentProfile)) {
+        profileBlocks.set(currentProfile, new Set());
+        profileDates.set(currentProfile, {
+          latestDate: null,
+          latestDateStr: null,
+        });
       }
     }
 
@@ -225,46 +221,37 @@ async function extractPDFData(filePath) {
       /Quantidade de carencia(?:\s+\d+)?(?:\s*[:;]+\s*|\s+)(\d+)/
     );
 
-    const date = dateMatch ? dateMatch[1] : "";
-    const time = timeMatch ? timeMatch[1] || timeMatch[2] : "";
-    const carencia = carenciaMatch ? carenciaMatch[1] : "";
+    if (dateMatch && timeMatch && carenciaMatch) {
+      const date = dateMatch[1];
+      const blockKey = `${date}_${timeMatch[1]}_${carenciaMatch[1]}`;
 
-    if (date) {
-      const [day, month, year] = date.split("/").map(Number);
-      const currentDate = new Date(year, month - 1, day);
+      if (!profileBlocks.get(currentProfile).has(blockKey)) {
+        profileBlocks.get(currentProfile).add(blockKey);
 
-      if (!earliestDate || currentDate > earliestDate.date) {
-        earliestDate = {
-          date: currentDate,
-          dateStr: date,
-        };
+        if (date) {
+          const [day, month, year] = date.split("/").map(Number);
+          const currentDate = new Date(year, month - 1, day);
+          const profileDateInfo = profileDates.get(currentProfile);
+
+          if (
+            !profileDateInfo.latestDate ||
+            currentDate > profileDateInfo.latestDate
+          ) {
+            profileDateInfo.latestDate = currentDate;
+            profileDateInfo.latestDateStr = date;
+          }
+        }
+        const isDER = date === profileDates.get(currentProfile).latestDateStr;
+        result += `<span class="analiseDireito">Analise do direito em ${date}${
+          isDER ? " (DER)" : ""
+        }</span>\n\n`;
+        result += `Tempo de contribuição : ${timeMatch[1]}\n`;
+        result += `Quantidade de carência : ${carenciaMatch[1]}\n\n\n`;
       }
     }
-
-    result += `<span class="analiseDireito">Analise do direito em ${date}</span>\n\n`;
-    result += `Tempo de contribuição : ${time}\n`;
-    result += `Quantidade de carência : ${carencia}\n\n\n`;
   });
 
-  const newBlocks = result.split("\n\n\n");
-  const newProfile = newBlocks[0];
-  const uniqueBlocks = [...new Set(newBlocks.slice(1))];
-
-  // Adiciona DER na data mais recente
-  if (earliestDate && uniqueBlocks.length > 0) {
-    uniqueBlocks.forEach((block, index) => {
-      if (block.includes(earliestDate.dateStr)) {
-        uniqueBlocks[index] = block.replace(
-          /Analise do direito em ([\d\/]+)/,
-          `Analise do direito em $1 (DER)`
-        );
-      }
-    });
-  }
-
-  const finalResult = newProfile + "\n\n\n" + uniqueBlocks.join("\n\n\n");
-
-  return finalResult;
+  return result;
 }
 
 document.getElementById("extractBtn").addEventListener("click", async () => {
