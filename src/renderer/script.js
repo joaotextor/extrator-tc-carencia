@@ -118,16 +118,15 @@ function normalizeOCRNumbers(text) {
       .replace(/[B]/g, "8")}`;
   });
 
-  // New comprehensive pattern for time formats
-  const replacements = {
-    O: "0",
-    o: "0",
-    S: "5",
-    l: "1",
-    B: "8",
-  };
+  // First pass: handle O0X patterns in time values
+  text = text.replace(
+    /(\d+)a,\s*O0(\d+)m,\s*(\d+)d/gi,
+    (match, years, months, days) => {
+      return `${years}a, 0${months}m, ${days}d`;
+    }
+  );
 
-  // Handle all three patterns for time values
+  // Second pass: handle remaining time format patterns
   text = text.replace(
     /(\d|[OoSlB])(\d|[OoSlB])(a,|m,|d)|(\d|[OoSlB])([OoSlB])(a,|m,|d)|([OoSlB])(\d|[OoSlB])(a,|m,|d)/g,
     (match) => {
@@ -164,7 +163,7 @@ async function extractPDFData(filePath) {
   console.log(fullText);
 
   let profileMatch = fullText.match(
-    /Perfil contributivo : \d+ - Aposentadoria por[^]*?(?=Regra de direito|$)/
+    /Perfil contributivo : \d+ - Aposentadoria por[^]*?(?=\s*Regra de direito|\s*Página|\s*=|\s*Anexo ID|$)/
   );
 
   if (profileMatch) {
@@ -178,8 +177,8 @@ async function extractPDFData(filePath) {
     fullText = fullText.replace(/\s+/g, " ").trim();
     fullText = normalizeOCRNumbers(fullText);
     console.log(`OCR Text: ${fullText}`);
-    profileMatch = fullText.match(
-      /Perfil contributivo : \d+ - Aposentadoria por[^]*?(?=Regra de direito|$)/
+    let profileMatch = fullText.match(
+      /Perfil contributivo : \d+ - Aposentadoria por[^]*?(?=\s*Regra de direito|\s*Página|\s*=|\s*Anexo ID|$)/
     );
     profile = profileMatch[0]
       .trim()
@@ -195,6 +194,7 @@ async function extractPDFData(filePath) {
 
   let result = "";
   currentProfile = profile;
+  console.log(`Number of blocks: ${blocks.length}`);
 
   blocks.forEach((block) => {
     // Mantém apenas espaço simples.
@@ -202,33 +202,27 @@ async function extractPDFData(filePath) {
     console.log(`Normalized Block: ${normalizedBlock}`);
 
     const profileMatch = normalizedBlock.match(
-      /Perfil contributivo : \d+ - Aposentadoria por[^]*?(?=Regra de direito|Anexo ID|$)/
+      /Perfil contributivo : \d+ - Aposentadoria por[^]*?(?:\s*\(BIC\))?(?=\s*Regra de direito|\s*Página|\s*=|\s*Anexo ID|$)/
     );
 
-    if (
-      profileMatch &&
-      profileMatch[0]
-        .replace("contribuícao", "contribuição")
-        .replace("contribuicao", "contribuição")
-        .replace("contríbuicao", "contribuição") !== currentProfile
-    ) {
-      currentProfile = profileMatch[0]
-        .replace("contribuícao", "contribuição")
-        .replace("contribuicao", "contribuição")
-        .replace("contríbuicao", "contribuição");
-      result += `<span class="beneficio">${currentProfile}</span>\n\n\n`;
-    }
+    if (profileMatch) {
+      const newProfile = profileMatch[0].trim();
+      if (newProfile !== currentProfile) {
+        currentProfile = newProfile;
 
-    // if (normalizedBlock.includes("Tempo de contribuicao (bruto)")) {
-    //   return;
-    // }
+        result += `<span class="beneficio">${currentProfile
+          .replace("contribuícao", "contribuição")
+          .replace("contribuicao", "contribuição")
+          .replace("contríbuicao", "contribuição")}</span>\n\n\n`;
+      }
+    }
 
     const dateMatch = normalizedBlock.match(/Analise do direito em ([\d\/]+)/);
     const timeMatch = normalizedBlock.match(
-      /(?:Tempo de contribuicao|Total de tempo comum)(?:\s+\d+)?\s*:?\s*([\d]+a,\s*[\d]+m,\s*[\d]+d)/
+      /(?:Tempo de contribuicao|Total de tempo comum)(?:\s+\d+)?(?:\s*[:;]+\s*|\s+)([\d]+a,\s*[\d]+m,\s*[\d]+d)/
     );
     const carenciaMatch = normalizedBlock.match(
-      /Quantidade de carencia(?:\s+\d+)?\s*:?\s*(\d+)/
+      /Quantidade de carencia(?:\s+\d+)?(?:\s*[:;]+\s*|\s+)(\d+)/
     );
 
     const date = dateMatch ? dateMatch[1] : "";
