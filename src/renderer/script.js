@@ -128,13 +128,14 @@ function normalizeOCRNumbers(text) {
 
   // Second pass: handle remaining time format patterns
   text = text.replace(
-    /(\d|[OoSlB])(\d|[OoSlB])(a,|m,|d)|(\d|[OoSlB])([OoSlB])(a,|m,|d)|([OoSlB])(\d|[OoSlB])(a,|m,|d)/g,
+    /(\d|[OoSlBá])(\d|[OoSlBá])(a,|m,|d)|(\d|[OoSlBá])([OoSlBá])(a,|m,|d)|([OoSlBá])(\d|[OoSlBá])(a,|m,|d)/g,
     (match) => {
       return match
         .replace(/[Oo]/g, "0")
         .replace(/[S]/g, "5")
         .replace(/[l]/g, "1")
-        .replace(/[B]/g, "8");
+        .replace(/[B]/g, "8")
+        .replace(/[á]/g, "4");
     }
   );
 
@@ -196,6 +197,7 @@ async function extractPDFData(filePath) {
 
   blocks.forEach((block) => {
     const normalizedBlock = block.replace(/\s+/g, " ").trim();
+    console.log("Normalized Block:", normalizedBlock);
 
     const profileMatch = normalizedBlock.match(
       /Perfil contributivo : \d+ - Aposentadoria por[^]*?(?=\s*Regra de direito|\s*Página|\s*=|\s*Anexo ID|$)/
@@ -215,7 +217,7 @@ async function extractPDFData(filePath) {
 
     const dateMatch = normalizedBlock.match(/Analise do direito em ([\d\/]+)/);
     const timeMatch = normalizedBlock.match(
-      /(?:Tempo de contribuicao|Total de tempo comum)(?:\s+\d+)?(?:\s*[:;]+\s*|\s+)([\d]+a,\s*[\d]+m,\s*[\d]+d)/
+      /(?:Total de tempo c\/conversao|Tempo de contribuicao)(?:\s+\d+)?(?:\s*[:;]+\s*|\s+)([\d]+a,\s*[\d]+m,\s*[\d]+d)/
     );
     const carenciaMatch = normalizedBlock.match(
       /Quantidade de carencia(?:\s+\d+)?(?:\s*[:;]+\s*|\s+)(\d+)/
